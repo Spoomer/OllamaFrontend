@@ -1,0 +1,123 @@
+﻿@page "/"
+@using OllamaFrontend.App.Models
+@using Ndjson.AsyncStreams.Net.Http
+@using Markdig
+@using Markdown.ColorCode
+@inject IHttpClientFactory HttpClientFactory
+
+<PageTitle>Ollama Chat</PageTitle>
+<div class="d-flex flex-column justify-content-end page">
+    <div id="chat" class="d-flex flex-column flex-grow-1 scroll-x">
+        @foreach (var entry in _chatHistory)
+        {
+            if (entry.User)
+            {
+                <div class="d-flex flex-row-reverse">
+                    <div class="card" style="max-width: 80%;">
+                        <div class="card-body">
+                            @((MarkupString)Markdown.ToHtml(@entry.Message, _pipeline))
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="d-flex flex-row">
+                    <div class="card" style="max-width: 80%;">
+                        <div class="card-body">
+                            @((MarkupString)Markdown.ToHtml(@entry.Message, _pipeline))
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+    <div class="form-floating mb-3">
+        <input disabled="@_isResponding" type="text" @onchange="InputOnChange" @onkeydown="InputOnKeyDown" value="@_input" class="form-control" id="floatingInput" placeholder="Your Message">
+        <label for="floatingInput">Your Message</label>
+    </div>
+    <button type="button" @onclick="SubmitAsync" disabled="@_isResponding" class="btn btn-primary">Send</button>
+
+</div>
+
+@code {
+    private bool _isResponding;
+    private bool _enterIsFired;
+    private string _input = "";
+    private readonly List<ChatEntry> _chatHistory = [];
+    private readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
+        .UseAdvancedExtensions()
+        .UseColorCode()
+        .Build();
+    
+
+    private void InputOnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Code is "Enter" or "NumpadEnter")
+        {
+            _enterIsFired = true;
+        }
+    }
+    
+    private void InputOnChange(ChangeEventArgs obj)
+    {
+        if (obj.Value is string input && !_isResponding)
+        {
+            _input = input;
+            if (_enterIsFired)
+            {
+                _enterIsFired = false;
+                _ = SubmitAsync();
+            }
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _isResponding = true;
+        StateHasChanged();
+        try
+        {
+            var promptRequest = new PromptRequest
+            {
+                Model = "mistral",
+                Prompt = _input
+            };
+            _chatHistory.Add(new ChatEntry(true, _input));
+            _input = string.Empty;
+            StateHasChanged();
+            var httpClient = HttpClientFactory.CreateClient();
+            var content = JsonContent.Create(promptRequest);
+            var request = new HttpRequestMessage
+            {
+                Content = content,
+                Method = HttpMethod.Post,
+                RequestUri = new Uri("http://localhost:11434/api/generate", UriKind.Absolute),
+                Version = new Version(3, 0),
+                VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+            };
+            request.SetBrowserResponseStreamingEnabled(true);
+            request.Headers.Add("Accept", "application/x-ndjson");
+            using HttpResponseMessage response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var chatEntry = new ChatEntry(false, string.Empty);
+                _chatHistory.Add(chatEntry);
+                await foreach (var promptResponse in response.Content.ReadFromNdjsonAsync<PromptResponse>())
+                {
+                    if (promptResponse is null) continue;
+                    chatEntry.Message += promptResponse.Response;
+                    StateHasChanged();
+                }
+            }
+        }
+        finally
+        {
+            _isResponding = false;
+            StateHasChanged();
+        }
+    }
+
+
+}
