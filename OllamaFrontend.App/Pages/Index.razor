@@ -84,10 +84,10 @@
         };
         _chatHistory.Add(new ChatEntry(true, _input));
         _input = string.Empty;
+        StateHasChanged();
         _isResponding = true;
         try
         {
-            StateHasChanged();
             var httpClient = HttpClientFactory.CreateClient();
             var content = JsonContent.Create(promptRequest);
             var request = new HttpRequestMessage
