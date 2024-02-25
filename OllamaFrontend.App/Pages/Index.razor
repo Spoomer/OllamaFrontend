@@ -15,7 +15,7 @@
                 <div class="d-flex flex-row-reverse">
                     <div class="card" style="max-width: 80%;">
                         <div class="card-body">
-                            @((MarkupString)Markdown.ToHtml(@entry.Message, _pipeline))
+                            @((MarkupString) Markdown.ToHtml(@entry.Message, _pipeline))
                         </div>
                     </div>
                 </div>
@@ -25,7 +25,7 @@
                 <div class="d-flex flex-row">
                     <div class="card" style="max-width: 80%;">
                         <div class="card-body">
-                            @((MarkupString)Markdown.ToHtml(@entry.Message, _pipeline))
+                            @((MarkupString) Markdown.ToHtml(@entry.Message, _pipeline))
                         </div>
                     </div>
                 </div>
@@ -45,11 +45,12 @@
     private bool _enterIsFired;
     private string _input = "";
     private readonly List<ChatEntry> _chatHistory = [];
+
     private readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()
         .UseColorCode()
         .Build();
-    
+
 
     private void InputOnKeyDown(KeyboardEventArgs e)
     {
@@ -58,7 +59,7 @@
             _enterIsFired = true;
         }
     }
-    
+
     private void InputOnChange(ChangeEventArgs obj)
     {
         if (obj.Value is string input && !_isResponding)
@@ -74,17 +75,18 @@
 
     private async Task SubmitAsync()
     {
-        _isResponding = true;
         StateHasChanged();
+
+        var promptRequest = new PromptRequest
+        {
+            Model = "mistral",
+            Prompt = _input
+        };
+        _chatHistory.Add(new ChatEntry(true, _input));
+        _input = string.Empty;
+        _isResponding = true;
         try
         {
-            var promptRequest = new PromptRequest
-            {
-                Model = "mistral",
-                Prompt = _input
-            };
-            _chatHistory.Add(new ChatEntry(true, _input));
-            _input = string.Empty;
             StateHasChanged();
             var httpClient = HttpClientFactory.CreateClient();
             var content = JsonContent.Create(promptRequest);
