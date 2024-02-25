@@ -33,8 +33,8 @@
         }
     </div>
     <div class="form-floating mb-3">
-        <input type="text" @onchange="InputOnChange" @onkeydown="InputOnKeyDown" value="@_input"  class="form-control" id="floatingInput" placeholder="Your Message">
-        <label for="floatingInput">Your Message</label>
+        <input id="messageInput"  type="text" @onchange="InputOnChangeAsync" @onkeydown="InputOnKeyDown" @bind-value="_input" @bind-value:event="oninput" class="form-control" placeholder="Your Message">
+        <label for="messageInput">Your Message</label>
     </div>
     <button type="button" @onclick="SubmitAsync" class="btn btn-primary">Send</button>
 
@@ -44,7 +44,7 @@
     private bool _enterIsFired;
     private string _input = "";
     private readonly List<ChatEntry> _chatHistory = [];
-    private CancellationTokenSource? _tokenSource = null;
+    private CancellationTokenSource? _tokenSource;
 
     private readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()
@@ -60,7 +60,7 @@
         }
     }
 
-    private void InputOnChange(ChangeEventArgs obj)
+    private async Task InputOnChangeAsync(ChangeEventArgs obj)
     {
         if (obj.Value is not string input) return;
         
@@ -69,7 +69,7 @@
         if (_enterIsFired)
         {
             _enterIsFired = false;
-            _ = SubmitAsync();
+            await SubmitAsync();
         }
     }
 
@@ -83,7 +83,7 @@
         };
         _chatHistory.Add(new ChatEntry(true, _input));
         _input = string.Empty;
-        StateHasChanged();
+        await InvokeAsync(StateHasChanged);
         _tokenSource = new CancellationTokenSource();
         try
         {
@@ -121,7 +121,7 @@
         {
             if (promptResponse is null) continue;
             chatEntry.Message += promptResponse.Response;
-            StateHasChanged();
+            await InvokeAsync(StateHasChanged);
         }
     }
 
