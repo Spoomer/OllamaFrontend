@@ -33,18 +33,18 @@
         }
     </div>
     <div class="form-floating mb-3">
-        <input disabled="@_isResponding" type="text" @onchange="InputOnChange" @onkeydown="InputOnKeyDown" value="@_input" class="form-control" id="floatingInput" placeholder="Your Message">
+        <input type="text" @onchange="InputOnChange" @onkeydown="InputOnKeyDown" value="@_input"  class="form-control" id="floatingInput" placeholder="Your Message">
         <label for="floatingInput">Your Message</label>
     </div>
-    <button type="button" @onclick="SubmitAsync" disabled="@_isResponding" class="btn btn-primary">Send</button>
+    <button type="button" @onclick="SubmitAsync" class="btn btn-primary">Send</button>
 
 </div>
 
 @code {
-    private bool _isResponding;
     private bool _enterIsFired;
     private string _input = "";
     private readonly List<ChatEntry> _chatHistory = [];
+    private CancellationTokenSource? _tokenSource = null;
 
     private readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()
@@ -62,21 +62,20 @@
 
     private void InputOnChange(ChangeEventArgs obj)
     {
-        if (obj.Value is string input && !_isResponding)
+        if (obj.Value is not string input) return;
+        
+        _input = input;
+
+        if (_enterIsFired)
         {
-            _input = input;
-            if (_enterIsFired)
-            {
-                _enterIsFired = false;
-                _ = SubmitAsync();
-            }
+            _enterIsFired = false;
+            _ = SubmitAsync();
         }
     }
 
     private async Task SubmitAsync()
     {
-        StateHasChanged();
-
+        await CancelPreviousRequests();
         var promptRequest = new PromptRequest
         {
             Model = "mistral",
@@ -85,7 +84,7 @@
         _chatHistory.Add(new ChatEntry(true, _input));
         _input = string.Empty;
         StateHasChanged();
-        _isResponding = true;
+        _tokenSource = new CancellationTokenSource();
         try
         {
             var httpClient = HttpClientFactory.CreateClient();
@@ -100,24 +99,39 @@
             };
             request.SetBrowserResponseStreamingEnabled(true);
             request.Headers.Add("Accept", "application/x-ndjson");
-            using HttpResponseMessage response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            using HttpResponseMessage response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, _tokenSource.Token);
 
             if (response.IsSuccessStatusCode)
             {
-                var chatEntry = new ChatEntry(false, string.Empty);
-                _chatHistory.Add(chatEntry);
-                await foreach (var promptResponse in response.Content.ReadFromNdjsonAsync<PromptResponse>())
-                {
-                    if (promptResponse is null) continue;
-                    chatEntry.Message += promptResponse.Response;
-                    StateHasChanged();
-                }
+                await AddResponseAsync(response, _tokenSource.Token);
             }
         }
         finally
         {
-            _isResponding = false;
+            _tokenSource?.Dispose();
+            _tokenSource = null;
+        }
+    }
+
+    private async Task AddResponseAsync(HttpResponseMessage response, CancellationToken token)
+    {
+        var chatEntry = new ChatEntry(false, string.Empty);
+        _chatHistory.Add(chatEntry);
+        await foreach (var promptResponse in response.Content.ReadFromNdjsonAsync<PromptResponse>(cancellationToken: token))
+        {
+            if (promptResponse is null) continue;
+            chatEntry.Message += promptResponse.Response;
             StateHasChanged();
+        }
+    }
+
+    private async Task CancelPreviousRequests()
+    {
+        if (_tokenSource is not null)
+        {
+            await _tokenSource.CancelAsync();
+            _tokenSource.Dispose();
+            _tokenSource = null;
         }
     }
 
