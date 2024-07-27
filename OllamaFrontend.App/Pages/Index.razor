@@ -4,18 +4,27 @@
 @using Markdig
 @using Markdown.ColorCode
 @inject IHttpClientFactory HttpClientFactory
+@inject IJSRuntime Js
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 
 <PageTitle>Ollama Chat</PageTitle>
 <div class="d-flex flex-column justify-content-end page">
+    <div class="d-flex justify-content-between border-bottom m-2">
+        <div class="fw-bold">Ollama Chat</div>
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="flexSwitchCheckDefault" @onchange="ChangeDarkModeAsync" checked="@_prefersDarkMode">
+            <label class="form-check-label" for="flexSwitchCheckDefault">Dark mode</label>
+        </div>
+    </div>
     <div id="chat" class="d-flex flex-column flex-grow-1 scroll-x">
         @foreach (var entry in _chatHistory)
         {
             if (entry.User)
             {
                 <div class="d-flex flex-row-reverse">
-                    <div class="card text-bg-light" style="max-width: 80%;">
-                        <div class="card-body">
-                            @((MarkupString) Markdown.ToHtml(@entry.Message, _pipeline))
+                    <div class="card" style="max-width: 80%;">
+                        <div class="card-body pb-1">
+                            @((MarkupString)Markdown.ToHtml(@entry.Message, _pipeline))
                         </div>
                     </div>
                 </div>
@@ -24,8 +33,8 @@
             {
                 <div class="d-flex flex-row">
                     <div class="card text-bg-info" style="max-width: 80%;">
-                        <div class="card-body">
-                            @((MarkupString) Markdown.ToHtml(@entry.Message, _pipeline))
+                        <div class="card-body pb-1">
+                            @((MarkupString)Markdown.ToHtml(@entry.Message, _pipeline))
                         </div>
                     </div>
                 </div>
@@ -33,7 +42,7 @@
         }
     </div>
     <div class="form-floating mb-3">
-        <input id="messageInput"  type="text" @onchange="InputOnChangeAsync" @onkeydown="InputOnKeyDown" @bind-value="_input" @bind-value:event="oninput" class="form-control" placeholder="Your Message">
+        <input id="messageInput" type="text" @onchange="InputOnChangeAsync" @onkeydown="InputOnKeyDown" @bind-value="_input" @bind-value:event="oninput" class="form-control" placeholder="Your Message">
         <label for="messageInput">Your Message</label>
     </div>
     <div class="d-flex ">
@@ -53,12 +62,14 @@
 </div>
 
 @code {
+    private const string PrefersDarkMode = "prefersDarkMode";
     private bool _enterIsFired;
     private string _input = "";
     private readonly List<ChatEntry> _chatHistory = [];
     private CancellationTokenSource? _tokenSource;
     private IReadOnlyList<Model> _availableModels = [];
     private string _currentModel = "No Model selected";
+    private bool _prefersDarkMode = false;
 
     private readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()
@@ -67,12 +78,24 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var prefersDarkModeSaved = await LocalStorage.ContainKeyAsync(PrefersDarkMode);
+        if (prefersDarkModeSaved)
+        {
+            _prefersDarkMode = await LocalStorage.GetItemAsync<bool>(PrefersDarkMode);
+            await Js.InvokeVoidAsync("setTheme", _prefersDarkMode);
+        }
+        else
+        {
+            _prefersDarkMode = await Js.InvokeAsync<bool>(PrefersDarkMode);
+        }
+        
         var httpClient = HttpClientFactory.CreateClient();
         var models = await httpClient.GetFromJsonAsync<ModelsResponse>(new Uri("http://localhost:11434/api/tags", UriKind.Absolute));
         if (models is not null)
         {
             _availableModels = models.Models;
         }
+        StateHasChanged();
     }
 
     private void InputOnKeyDown(KeyboardEventArgs e)
@@ -167,5 +190,12 @@
         }
     }
 
+
+    private async Task ChangeDarkModeAsync(ChangeEventArgs obj)
+    {
+        if (obj.Value is not bool darkMode) return;
+        await LocalStorage.SetItemAsync(PrefersDarkMode, darkMode);
+        await Js.InvokeVoidAsync("setTheme", darkMode);
+    }
 
 }
