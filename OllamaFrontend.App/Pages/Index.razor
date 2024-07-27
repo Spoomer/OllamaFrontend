@@ -13,7 +13,7 @@
             if (entry.User)
             {
                 <div class="d-flex flex-row-reverse">
-                    <div class="card" style="max-width: 80%;">
+                    <div class="card text-bg-light" style="max-width: 80%;">
                         <div class="card-body">
                             @((MarkupString) Markdown.ToHtml(@entry.Message, _pipeline))
                         </div>
@@ -23,7 +23,7 @@
             else
             {
                 <div class="d-flex flex-row">
-                    <div class="card" style="max-width: 80%;">
+                    <div class="card text-bg-info" style="max-width: 80%;">
                         <div class="card-body">
                             @((MarkupString) Markdown.ToHtml(@entry.Message, _pipeline))
                         </div>
@@ -36,8 +36,20 @@
         <input id="messageInput"  type="text" @onchange="InputOnChangeAsync" @onkeydown="InputOnKeyDown" @bind-value="_input" @bind-value:event="oninput" class="form-control" placeholder="Your Message">
         <label for="messageInput">Your Message</label>
     </div>
-    <button type="button" @onclick="SubmitAsync" class="btn btn-primary">Send</button>
-
+    <div class="d-flex ">
+        <button type="button" @onclick="SubmitAsync" class="btn btn-primary flex-grow-1">Send</button>
+        <div class="btn-group dropup">
+            <button type="button" class="btn btn-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                @_currentModel
+            </button>
+            <ul class="dropdown-menu">
+                @foreach (var model in _availableModels)
+                {
+                    <li><button type="button" class="dropdown-item" @onclick="() => { _currentModel = model.ModelName; }">@model.ModelName</button></li>
+                }
+            </ul>
+        </div>
+    </div>
 </div>
 
 @code {
@@ -45,12 +57,23 @@
     private string _input = "";
     private readonly List<ChatEntry> _chatHistory = [];
     private CancellationTokenSource? _tokenSource;
+    private IReadOnlyList<Model> _availableModels = [];
+    private string _currentModel = "No Model selected";
 
     private readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()
         .UseColorCode()
         .Build();
 
+    protected override async Task OnInitializedAsync()
+    {
+        var httpClient = HttpClientFactory.CreateClient();
+        var models = await httpClient.GetFromJsonAsync<ModelsResponse>(new Uri("http://localhost:11434/api/tags", UriKind.Absolute));
+        if (models is not null)
+        {
+            _availableModels = models.Models;
+        }
+    }
 
     private void InputOnKeyDown(KeyboardEventArgs e)
     {
@@ -75,10 +98,15 @@
 
     private async Task SubmitAsync()
     {
+        if (_currentModel == "No Model selected")
+        {
+            _chatHistory.Add(new ChatEntry(false, "No Model selected - please select model! If you can't see a model, please pull a model with ollama ( e.g. `ollama pull llama3.1`) and reload page.."));
+            return;
+        }
         await CancelPreviousRequests();
         var promptRequest = new PromptRequest
         {
-            Model = "mistral",
+            Model = _currentModel,
             Prompt = _input
         };
         _chatHistory.Add(new ChatEntry(true, _input));
@@ -104,6 +132,10 @@
             if (response.IsSuccessStatusCode)
             {
                 await AddResponseAsync(response, _tokenSource.Token);
+            }
+            else
+            {
+                Console.WriteLine($"Ollama api error: {await response.Content.ReadAsStringAsync()}");
             }
         }
         finally
