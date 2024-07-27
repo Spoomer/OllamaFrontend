@@ -6,6 +6,7 @@
 @inject IHttpClientFactory HttpClientFactory
 @inject IJSRuntime Js
 @inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject IConfiguration Configuration
 
 <PageTitle>Ollama Chat</PageTitle>
 <div class="d-flex flex-column justify-content-end page">
@@ -70,7 +71,7 @@
     private IReadOnlyList<Model> _availableModels = [];
     private string _currentModel = "No Model selected";
     private bool _prefersDarkMode = false;
-
+    private string _ollamaHost = "http://localhost:11434";
     private readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()
         .UseColorCode()
@@ -78,6 +79,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _ollamaHost = Configuration[SettingConsts.OllamaHost] ?? "http://localhost:11434";
         var prefersDarkModeSaved = await LocalStorage.ContainKeyAsync(PrefersDarkMode);
         if (prefersDarkModeSaved)
         {
@@ -90,7 +92,7 @@
         }
         
         var httpClient = HttpClientFactory.CreateClient();
-        var models = await httpClient.GetFromJsonAsync<ModelsResponse>(new Uri("http://localhost:11434/api/tags", UriKind.Absolute));
+        var models = await httpClient.GetFromJsonAsync<ModelsResponse>(new Uri($"{_ollamaHost}/api/tags", UriKind.Absolute));
         if (models is not null)
         {
             _availableModels = models.Models;
@@ -144,7 +146,7 @@
             {
                 Content = content,
                 Method = HttpMethod.Post,
-                RequestUri = new Uri("http://localhost:11434/api/generate", UriKind.Absolute),
+                RequestUri = new Uri($"{_ollamaHost}/api/generate", UriKind.Absolute),
                 Version = new Version(3, 0),
                 VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
             };
