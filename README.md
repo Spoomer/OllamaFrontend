@@ -5,8 +5,9 @@
 
 # Usage
 - `cd OllamaFrontend.App`
+- optional: change Ollama Host in OllamaFrontend.App/wwwroot/appsettings.json
 - `dotnet run`
 - open http://localhost:5275
-- optional install it as PWA in your browser
+- optional: install it as PWA in your browser
 
 ![grafik](https://github.com/user-attachments/assets/ad9d3798-0d88-4087-9003-d23e300f910c)
