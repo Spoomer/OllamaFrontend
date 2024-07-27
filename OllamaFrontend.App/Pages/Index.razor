@@ -55,7 +55,7 @@
             <ul class="dropdown-menu">
                 @foreach (var model in _availableModels)
                 {
-                    <li><button type="button" class="dropdown-item" @onclick="() => { _currentModel = model.ModelName; }">@model.ModelName</button></li>
+                    <li><button type="button" class="dropdown-item" @onclick="async () => { await ChangeModelAsync(model.ModelName);}">@model.ModelName</button></li>
                 }
             </ul>
         </div>
@@ -64,6 +64,7 @@
 
 @code {
     private const string PrefersDarkMode = "prefersDarkMode";
+    private const string CurrentModel = "currentModel";
     private bool _enterIsFired;
     private string _input = "";
     private readonly List<ChatEntry> _chatHistory = [];
@@ -97,6 +98,16 @@
         {
             _availableModels = models.Models;
         }
+
+        if (await LocalStorage.ContainKeyAsync(CurrentModel))
+        {
+            var currentModel = await LocalStorage.GetItemAsStringAsync(CurrentModel);
+            if (currentModel is not null && _availableModels.FirstOrDefault(x => x.ModelName == currentModel) != null)
+            {
+                _currentModel = currentModel;
+            }
+        }
+        
         StateHasChanged();
     }
 
@@ -198,6 +209,12 @@
         if (obj.Value is not bool darkMode) return;
         await LocalStorage.SetItemAsync(PrefersDarkMode, darkMode);
         await Js.InvokeVoidAsync("setTheme", darkMode);
+    }
+
+    private async Task ChangeModelAsync(string modelName)
+    {
+        _currentModel = modelName;
+        await LocalStorage.SetItemAsStringAsync(CurrentModel, modelName);
     }
 
 }
