@@ -23,7 +23,7 @@
             if (entry.User)
             {
                 <div class="d-flex flex-row-reverse">
-                    <div class="card" style="max-width: 80%;">
+                    <div class="card ai-message">
                         <div class="card-body pb-1">
                             @((MarkupString)Markdown.ToHtml(@entry.Message, _pipeline))
                         </div>
@@ -33,7 +33,7 @@
             else
             {
                 <div class="d-flex flex-row">
-                    <div class="card text-bg-info" style="max-width: 80%;">
+                    <div class="card user-message">
                         <div class="card-body pb-1">
                             @((MarkupString)Markdown.ToHtml(@entry.Message, _pipeline))
                         </div>
@@ -149,6 +149,7 @@
         _input = string.Empty;
         await InvokeAsync(StateHasChanged);
         _tokenSource = new CancellationTokenSource();
+        var token = _tokenSource.Token;
         try
         {
             var httpClient = HttpClientFactory.CreateClient();
@@ -163,11 +164,11 @@
             };
             request.SetBrowserResponseStreamingEnabled(true);
             request.Headers.Add("Accept", "application/x-ndjson");
-            using HttpResponseMessage response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, _tokenSource.Token);
+            using HttpResponseMessage response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
 
             if (response.IsSuccessStatusCode)
             {
-                await AddResponseAsync(response, _tokenSource.Token);
+                await AddResponseAsync(response, token);
             }
             else
             {

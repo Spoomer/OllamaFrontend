@@ -101,9 +101,18 @@ a, .btn-link {
 }
 
 code {
-    color: #c02d76;
+    color: #FF4500;
 }
 
 .scroll-x {
     overflow-x: auto;
+}
+
+.user-message{
+    max-width: 80%; 
+    background-color: rgba(57, 192, 237,.2);
+}
+
+.ai-message{
+    max-width: 80%;
 }
