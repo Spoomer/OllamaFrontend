@@ -1,12 +1,11 @@
 ﻿@page "/"
 @using OllamaFrontend.App.Models
-@using Ndjson.AsyncStreams.Net.Http
 @using Markdig
 @using Markdown.ColorCode
-@inject IHttpClientFactory HttpClientFactory
+@using OllamaFrontend.App.Domain
 @inject IJSRuntime Js
 @inject Blazored.LocalStorage.ILocalStorageService LocalStorage
-@inject IConfiguration Configuration
+@inject IAiClient AiClient
 
 <PageTitle>Ollama Chat</PageTitle>
 <div class="d-flex flex-column justify-content-end page">
@@ -35,7 +34,14 @@
                 <div class="d-flex flex-row">
                     <div class="card user-message">
                         <div class="card-body pb-1">
-                            @((MarkupString)Markdown.ToHtml(@entry.Message, _pipeline))
+                            @if (string.IsNullOrWhiteSpace(entry.Message))
+                            {
+                                <img src="3-dots-loading.svg" alt="loading-svg" style="filter: invert(@(_prefersDarkMode ? "100%" : "0%")"/>
+                            }
+                            else
+                            {
+                                @((MarkupString)Markdown.ToHtml(@entry.Message, _pipeline))
+                            }
                         </div>
                     </div>
                 </div>
@@ -72,7 +78,6 @@
     private IReadOnlyList<Model> _availableModels = [];
     private string _currentModel = "No Model selected";
     private bool _prefersDarkMode = false;
-    private string _ollamaHost = "http://localhost:11434";
     private readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()
         .UseColorCode()
@@ -80,7 +85,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _ollamaHost = Configuration[SettingConsts.OllamaHost] ?? "http://localhost:11434";
         var prefersDarkModeSaved = await LocalStorage.ContainKeyAsync(PrefersDarkMode);
         if (prefersDarkModeSaved)
         {
@@ -91,13 +95,8 @@
         {
             _prefersDarkMode = await Js.InvokeAsync<bool>(PrefersDarkMode);
         }
-        
-        var httpClient = HttpClientFactory.CreateClient();
-        var models = await httpClient.GetFromJsonAsync<ModelsResponse>(new Uri($"{_ollamaHost}/api/tags", UriKind.Absolute));
-        if (models is not null)
-        {
-            _availableModels = models.Models;
-        }
+
+        _availableModels = await AiClient.GetModelsAsync();
 
         if (await LocalStorage.ContainKeyAsync(CurrentModel))
         {
@@ -150,47 +149,21 @@
         await InvokeAsync(StateHasChanged);
         _tokenSource = new CancellationTokenSource();
         var token = _tokenSource.Token;
+
         try
         {
-            var httpClient = HttpClientFactory.CreateClient();
-            var content = JsonContent.Create(promptRequest);
-            var request = new HttpRequestMessage
+            var chatEntry = new ChatEntry(false, string.Empty);
+            _chatHistory.Add(chatEntry);
+            await foreach (var promptResponse in AiClient.SendRequestAsync(promptRequest, token: token))
             {
-                Content = content,
-                Method = HttpMethod.Post,
-                RequestUri = new Uri($"{_ollamaHost}/api/generate", UriKind.Absolute),
-                Version = new Version(3, 0),
-                VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
-            };
-            request.SetBrowserResponseStreamingEnabled(true);
-            request.Headers.Add("Accept", "application/x-ndjson");
-            using HttpResponseMessage response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
-
-            if (response.IsSuccessStatusCode)
-            {
-                await AddResponseAsync(response, token);
-            }
-            else
-            {
-                Console.WriteLine($"Ollama api error: {await response.Content.ReadAsStringAsync()}");
+                chatEntry.Message += promptResponse;
+                await InvokeAsync(StateHasChanged);
             }
         }
         finally
         {
             _tokenSource?.Dispose();
             _tokenSource = null;
-        }
-    }
-
-    private async Task AddResponseAsync(HttpResponseMessage response, CancellationToken token)
-    {
-        var chatEntry = new ChatEntry(false, string.Empty);
-        _chatHistory.Add(chatEntry);
-        await foreach (var promptResponse in response.Content.ReadFromNdjsonAsync<PromptResponse>(cancellationToken: token))
-        {
-            if (promptResponse is null) continue;
-            chatEntry.Message += promptResponse.Response;
-            await InvokeAsync(StateHasChanged);
         }
     }
 
