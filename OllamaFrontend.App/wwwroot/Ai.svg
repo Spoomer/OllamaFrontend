@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <path id="path-0" d="M 102.784 148.822 C 116.918 123.231 128.388 106.623 142.934 92.077 C 180.186 77.168 195.401 86.839 210.385 110.814 C 219.468 120.432 224.997 130.118 231.799 139.186 L 233.405 141.328 C 234.823 144.165 237.51 147.576 238.223 150.428" style="fill: none;"/>
+  </defs>
+  <text style="fill: rgb(51, 51, 51); font-family: Arial, sans-serif; font-size: 47px; white-space: pre;" transform="matrix(8.02883, 0, 0, 8.567413, -1077.088135, -357.134766)"><textPath startOffset="71" xlink:href="#path-0">AI</textPath></text>
+</svg>
