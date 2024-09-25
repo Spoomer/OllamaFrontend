@@ -6,4 +6,5 @@ public interface IAiClient
 {
     Task<IReadOnlyList<Model>> GetModelsAsync();
     IAsyncEnumerable<string> SendRequestAsync(PromptRequest promptRequest, CancellationToken token = default);
+    void Reset();
 }

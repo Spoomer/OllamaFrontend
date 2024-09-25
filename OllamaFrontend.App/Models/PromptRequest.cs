@@ -4,4 +4,5 @@ public record PromptRequest
 {
     public required string Model { get; set; }
     public required string Prompt { get; set; }
+    public IReadOnlyList<int>? Context { get; set; }
 }

@@ -1,4 +1,5 @@
 ﻿@page "/"
+@using System.Text
 @using OllamaFrontend.App.Models
 @using Markdig
 @using Markdown.ColorCode
@@ -54,6 +55,8 @@
     </div>
     <div class="d-flex ">
         <button type="button" @onclick="SubmitAsync" class="btn btn-primary flex-grow-1">Send</button>
+        <button type="button" class="btn btn-info btn-sm" @onclick="SaveAsMarkDownFileAsync"><img role="img" src="icons/file-earmark-arrow-down.svg" alt="save conversation to file"/></button>
+        <button type="button"  class="btn btn-danger btn-sm" @onclick="DeleteConversation"><img  role="img" class="" src="icons/trash.svg" alt="delete conversation"/></button>
         <div class="btn-group dropup">
             <button type="button" class="btn btn-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
                 @_currentModel
@@ -85,6 +88,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        AiClient.Reset();
         var prefersDarkModeSaved = await LocalStorage.ContainKeyAsync(PrefersDarkMode);
         if (prefersDarkModeSaved)
         {
@@ -189,6 +193,40 @@
     {
         _currentModel = modelName;
         await LocalStorage.SetItemAsStringAsync(CurrentModel, modelName);
+    }
+
+    private async Task SaveAsMarkDownFileAsync()
+    {
+        StringBuilder content = new();
+        foreach (var chatEntry in _chatHistory)
+        {
+            
+            if (chatEntry.User)
+            {
+                content.AppendLine("## You");
+
+            }
+            else
+            {
+                content.AppendLine("## AI");
+            }
+
+            content.AppendLine(chatEntry.Message);
+        }
+
+        using MemoryStream stream = new();
+        await using StreamWriter streamWriter = new StreamWriter(stream, Encoding.UTF8);
+        await streamWriter.WriteAsync(content);
+        await streamWriter.FlushAsync();
+        stream.Position = 0;
+        using var streamRef = new DotNetStreamReference(stream: stream);
+        await Js.InvokeVoidAsync("downloadFileFromStream", $"chat-{DateTime.Now:yyyyMMddHHmmss}.md", streamRef);
+    }
+
+    private void DeleteConversation()
+    {
+        AiClient.Reset();
+        _chatHistory.Clear();
     }
 
 }

@@ -9,7 +9,7 @@ public class OllamaClient : IAiClient
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly string _ollamaHost;
-
+    private IReadOnlyList<int>? _context;
     public OllamaClient(IHttpClientFactory httpClientFactory, IConfiguration configuration)
     {
         _httpClientFactory = httpClientFactory;
@@ -27,6 +27,7 @@ public class OllamaClient : IAiClient
     public async IAsyncEnumerable<string> SendRequestAsync(PromptRequest promptRequest, CancellationToken token = default)
     {
         var httpClient = _httpClientFactory.CreateClient();
+        promptRequest.Context = _context;
         var content = JsonContent.Create(promptRequest);
         var request = new HttpRequestMessage
         {
@@ -38,12 +39,17 @@ public class OllamaClient : IAiClient
         };
         request.SetBrowserResponseStreamingEnabled(true);
         request.Headers.Add("Accept", "application/x-ndjson");
-        var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
+        using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
         if (response.IsSuccessStatusCode)
         {
             await foreach (var promptResponse in response.Content.ReadFromNdjsonAsync<PromptResponse>(cancellationToken: token))
-            {
+            {               
                 if (promptResponse is null) continue;
+                if (promptResponse.Done)
+                {
+                    _context = promptResponse.Context;
+                    yield break;
+                }
                 yield return promptResponse.Response;
             }
         }
@@ -52,5 +58,9 @@ public class OllamaClient : IAiClient
             Console.WriteLine($"Ollama api error: {await response.Content.ReadAsStringAsync(CancellationToken.None)}");
         }
     }
-    
+
+    public void Reset()
+    {
+        _context = null;
+    }
 }
